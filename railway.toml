@@ -1,6 +1,7 @@
 [build]
 builder = "NIXPACKS"
-buildCommand = "npm install"
+installCommand = "npm install"
+buildCommand = "echo 'build done'"
 
 [deploy]
 startCommand = "npx tsx server.mjs"
