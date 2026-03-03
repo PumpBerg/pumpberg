@@ -2,7 +2,7 @@
 # Overrides default npm ci with npm install
 
 [phases.install]
-cmds = ["npm install --omit=dev"]
+cmds = ["rm -f package-lock.json", "npm install"]
 
 [phases.build]
 cmds = ["echo 'build done'"]
