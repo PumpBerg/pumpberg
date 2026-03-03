@@ -1,0 +1,30 @@
+{
+  "name": "@pumpberg/trader",
+  "version": "1.0.0",
+  "description": "Pumpberg — autonomous pump.fun trading bot with Proof of Data mining. Run your own bot, earn $PUMPBERG tokens.",
+  "type": "module",
+  "main": "server.mjs",
+  "scripts": {
+    "start": "npx tsx server.mjs",
+    "dev": "npx tsx server.mjs",
+    "dashboard:dev": "cd dashboard && npm run dev",
+    "dashboard:build": "cd dashboard && npm run build"
+  },
+  "dependencies": {
+    "@solana/spl-token": "^0.4.9",
+    "@solana/web3.js": "^1.98.0",
+    "@xenova/transformers": "^2.17.2",
+    "bs58": "^6.0.0",
+    "onnxruntime-node": "^1.24.2",
+    "sql.js": "^1.14.0"
+  },
+  "devDependencies": {
+    "@types/sql.js": "^1.4.9",
+    "esbuild": "^0.27.3"
+  },
+  "openclaw": {
+    "extensions": [
+      "./index.ts"
+    ]
+  }
+}
