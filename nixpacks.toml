@@ -2,7 +2,7 @@
 # Overrides default npm ci with npm install
 
 [phases.install]
-cmds = ["npm install --production"]
+cmds = ["npm install --omit=dev"]
 
 [phases.build]
 cmds = ["echo 'build done'"]
