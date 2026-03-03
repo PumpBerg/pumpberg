@@ -9,7 +9,7 @@ import { ChatPanel } from "./components/ChatPanel";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { LoginScreen } from "./components/LoginScreen";
 import { SetupWizard } from "./components/SetupWizard";
-import { MiningPanel } from "./components/MiningPanel";
+
 import { getStatus, getWallet, getLogs, getThinking, getPositions, getHistory, getTokens, subscribeToStream, getAuthToken, setAuthToken, clearAuth, getMe, type AuthUser } from "./api";
 import type { BotStatus, WalletInfo, LogEntry, ThinkingEntry, Position, TrackedToken } from "./types";
 
@@ -244,7 +244,6 @@ function Dashboard({ currentUser, onLogout }: { currentUser: AuthUser | null; on
         {/* Left column — Bot Info + Mining + Token Monitor */}
         <div className="w-[360px] shrink-0 border-r overflow-y-auto p-2 space-y-2">
           <BotInfoPanel status={status} wallet={wallet} onRefresh={handleRefresh} />
-          <MiningPanel />
           <TokenMonitorPanel tokens={tokens} compact onMaximize={() => setMaximizedPanel("tokens")} />
         </div>
 

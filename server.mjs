@@ -416,14 +416,8 @@ const server = createServer(async (req, res) => {
   }
 
   if (path === "/api/auth/register" && req.method === "POST") {
-    try {
-      const body = await readBody(req);
-      const { username, email, password } = body;
-      const result = registerUser(username, email, password);
-      return json(res, { ok: true, user: result.user, token: result.token });
-    } catch (err) {
-      return json(res, { ok: false, error: err.message }, 400);
-    }
+    // Registration is disabled — admin account is pre-created from env vars
+    return json(res, { ok: false, error: "Registration is disabled. Use the admin credentials from your .env file." }, 403);
   }
 
   if (path === "/api/auth/login" && req.method === "POST") {
