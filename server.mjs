@@ -120,11 +120,37 @@ if (!SETUP_MODE) {
 }
 
 // ── Apply persisted config overrides (from previous agent/user changes) ──
+const SENSITIVE_KEYS = new Set(["privateKey", "pumpPortalApiKey", "anthropicApiKey", "rpcUrl", "solanaWsUrl"]);
+
+function redactValue(key, val) {
+  if (SENSITIVE_KEYS.has(key) && typeof val === "string" && val.length > 8) {
+    return val.slice(0, 4) + "..." + val.slice(-4);
+  }
+  return val;
+}
+
+/** Strip secrets from any log message before it reaches the public API */
+function sanitizeLogMessage(msg) {
+  if (typeof msg !== "string") return msg;
+  // Redact base58 private keys (32-88 chars of base58 after =)
+  msg = msg.replace(/(privateKey[":\s=]+)[A-HJ-NP-Za-km-z1-9]{20,}/g, "$1[REDACTED]");
+  // Redact API keys
+  msg = msg.replace(/(api[_-]?key[":\s=]+)[^\s"',}{\]]+/gi, "$1[REDACTED]");
+  msg = msg.replace(/(sk-ant-api03-)[^\s"',}{\]]+/gi, "$1[REDACTED]");
+  // Redact Anthropic keys
+  msg = msg.replace(/(anthropicApiKey[":\s=]+)[^\s"',}{\]]+/gi, "$1[REDACTED]");
+  // Redact pumpPortalApiKey
+  msg = msg.replace(/(pumpPortalApiKey[":\s=]+)[^\s"',}{\]]+/gi, "$1[REDACTED]");
+  // Redact RPC URLs with api-key param
+  msg = msg.replace(/api-key=[A-Za-z0-9_-]{8,}/g, "api-key=[REDACTED]");
+  return msg;
+}
+
 const savedOverrides = loadPersistedConfig(DATA_DIR);
 for (const [key, value] of Object.entries(savedOverrides)) {
   if (key in config && key !== "dryRun") {
     config[key] = value;
-    logger.system(`Restored config: ${key} = ${value}`);
+    logger.system(`Restored config: ${key} = ${redactValue(key, value)}`);
   }
 }
 
@@ -469,12 +495,12 @@ const server = createServer(async (req, res) => {
     if (publicPath.startsWith("logs")) {
       const afterId = parseInt(query.get("afterId") || "0", 10);
       const entries = afterId > 0 ? logger.getAfter(afterId) : logger.getAll();
-      // Strip any sensitive data from log messages
+      // Strip any sensitive data from log messages — defense in depth
       const safe = entries.slice(-200).map(e => ({
         id: e.id,
         timestamp: e.timestamp,
         category: e.category,
-        message: e.message,
+        message: sanitizeLogMessage(e.message),
       }));
       return json(res, { entries: safe, lastId: safe.length > 0 ? safe[safe.length - 1].id : afterId });
     }
@@ -592,8 +618,8 @@ const server = createServer(async (req, res) => {
         RPC_HTTP_URL = wsToHttp(config.rpcUrl);
 
         logger.system("Setup complete — config reloaded, exiting SETUP_MODE.");
-        logger.system(`Wallet: ${config.privateKey ? config.privateKey.slice(0, 4) + '...' : 'not-set'}`);
-        logger.system(`RPC: ${config.rpcUrl}`);
+        logger.system(`Wallet: ${PUBLIC_KEY || 'not-set'}`);
+        logger.system(`RPC: ${config.rpcUrl.replace(/api-key=.*/, "api-key=***")}`);
       } catch (reloadErr) {
         console.error("[setup] Config reload after setup failed:", reloadErr.message);
         // Keys are saved; a server restart will pick them up
@@ -727,7 +753,12 @@ const server = createServer(async (req, res) => {
         }
       }
     }
-    logger.system(`Config updated: ${JSON.stringify(updated)}`);
+    // Redact secrets from the log output
+    const safeUpdated = {};
+    for (const [k, v] of Object.entries(updated)) {
+      safeUpdated[k] = redactValue(k, v);
+    }
+    logger.system(`Config updated: ${JSON.stringify(safeUpdated)}`);
     persistConfig(config, DATA_DIR);
     return json(res, { ok: true, updated });
   }

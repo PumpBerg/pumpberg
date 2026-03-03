@@ -1,7 +1,7 @@
 {
   "name": "@pumpberg/trader",
   "version": "1.0.0",
-  "description": "Pumpberg — autonomous pump.fun trading bot with Proof of Data mining. Run your own bot, earn $PUMPBERG tokens.",
+  "description": "Pumpberg — free open-source autonomous AI trading bot for pump.fun on Solana.",
   "type": "module",
   "main": "server.mjs",
   "scripts": {
