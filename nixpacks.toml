@@ -1,0 +1,11 @@
+# Nixpacks build configuration for Railway
+# Overrides default npm ci with npm install
+
+[phases.install]
+cmds = ["npm install --production"]
+
+[phases.build]
+cmds = ["echo 'build done'"]
+
+[start]
+cmd = "npx tsx server.mjs"
