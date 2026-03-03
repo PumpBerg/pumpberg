@@ -103,7 +103,7 @@ try {
     cooldownMs: 60000,
   };
 }
-const PORT = parseInt(process.env.PUMP_TRADER_DASHBOARD_PORT || "3847", 10);
+const PORT = parseInt(process.env.PUMP_TRADER_DASHBOARD_PORT || process.env.PORT || "3847", 10);
 
 // ── Configure admin account with API keys from settings/env ──
 // Admin gets pre-configured on first run so they don't need to complete the setup wizard
@@ -351,8 +351,45 @@ const server = createServer(async (req, res) => {
   const query = url.searchParams;
 
   // ── Auth endpoints (no auth required) ──
-  if (path === "/api/health") {
+  if (path === "/api/health" || path === "/health") {
     return json(res, { ok: true, timestamp: Date.now() });
+  }
+
+  // ── Site public pages (no auth, served before API) ──
+  const SITE_PUBLIC_DIR = resolve(__dirname, "site", "public");
+  const SITE_MIME = {
+    ".html": "text/html", ".css": "text/css", ".js": "application/javascript",
+    ".json": "application/json", ".png": "image/png", ".jpg": "image/jpeg",
+    ".svg": "image/svg+xml", ".ico": "image/x-icon",
+  };
+
+  if (existsSync(SITE_PUBLIC_DIR)) {
+    // Landing page
+    if (path === "/" || path === "/index.html") {
+      const fp = join(SITE_PUBLIC_DIR, "index.html");
+      if (existsSync(fp)) {
+        res.writeHead(200, { "Content-Type": "text/html" });
+        return res.end(readFileSync(fp));
+      }
+    }
+    // Live portal
+    if (path === "/live" || path === "/live.html") {
+      const fp = join(SITE_PUBLIC_DIR, "live.html");
+      if (existsSync(fp)) {
+        res.writeHead(200, { "Content-Type": "text/html" });
+        return res.end(readFileSync(fp));
+      }
+    }
+    // Site static assets (logo, og-image, etc.) — only files in site/public/
+    if (!path.startsWith("/api/") && !path.startsWith("/dashboard")) {
+      const safePath = path.replace(/\.\.\//g, "");
+      const assetPath = join(SITE_PUBLIC_DIR, safePath);
+      if (existsSync(assetPath) && !statSync(assetPath).isDirectory()) {
+        const ext = extname(assetPath);
+        res.writeHead(200, { "Content-Type": SITE_MIME[ext] || "application/octet-stream" });
+        return res.end(readFileSync(assetPath));
+      }
+    }
   }
 
   // ── Rate limiting for auth endpoints ──
@@ -1085,17 +1122,32 @@ const server = createServer(async (req, res) => {
       ".woff": "font/woff",
       ".woff2": "font/woff2",
     };
-    // Try to serve the exact file, otherwise serve index.html (SPA fallback)
-    let filePath = join(DASHBOARD_DIST, path === "/" ? "index.html" : path);
-    if (!existsSync(filePath) || statSync(filePath).isDirectory()) {
-      filePath = join(DASHBOARD_DIST, "index.html");
+    // Dashboard is served at /dashboard (or /dashboard/*)
+    if (path === "/dashboard" || path.startsWith("/dashboard/") || path.startsWith("/dashboard?")) {
+      const subPath = path.replace(/^\/dashboard\/?/, "/") || "/";
+      let filePath = join(DASHBOARD_DIST, subPath === "/" ? "index.html" : subPath);
+      if (!existsSync(filePath) || statSync(filePath).isDirectory()) {
+        filePath = join(DASHBOARD_DIST, "index.html");
+      }
+      if (existsSync(filePath) && !statSync(filePath).isDirectory()) {
+        const ext = extname(filePath);
+        const mime = MIME_TYPES[ext] || "application/octet-stream";
+        const content = readFileSync(filePath);
+        res.writeHead(200, { "Content-Type": mime });
+        return res.end(content);
+      }
     }
-    if (existsSync(filePath) && !statSync(filePath).isDirectory()) {
-      const ext = extname(filePath);
-      const mime = MIME_TYPES[ext] || "application/octet-stream";
-      const content = readFileSync(filePath);
-      res.writeHead(200, { "Content-Type": mime });
-      return res.end(content);
+    // Dashboard static assets (JS/CSS bundles) — served from root paths
+    // Vite outputs assets like /assets/index-abc123.js — these need to work
+    if (path.startsWith("/assets/")) {
+      const filePath = join(DASHBOARD_DIST, path);
+      if (existsSync(filePath) && !statSync(filePath).isDirectory()) {
+        const ext = extname(filePath);
+        const mime = MIME_TYPES[ext] || "application/octet-stream";
+        const content = readFileSync(filePath);
+        res.writeHead(200, { "Content-Type": mime, "Cache-Control": "public, max-age=31536000, immutable" });
+        return res.end(content);
+      }
     }
   }
 
