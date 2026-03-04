@@ -103,7 +103,7 @@ try {
     cooldownMs: 60000,
   };
 }
-const PORT = parseInt(process.env.PUMP_TRADER_DASHBOARD_PORT || process.env.PORT || "3847", 10);
+const PORT = parseInt(process.env.PORT || process.env.PUMP_TRADER_DASHBOARD_PORT || "3847", 10);
 
 // ── Configure admin account with API keys from settings/env ──
 // Admin gets pre-configured on first run so they don't need to complete the setup wizard

@@ -5,6 +5,6 @@ nixpacksConfigPath = "nixpacks.toml"
 [deploy]
 startCommand = "npx tsx server.mjs"
 healthcheckPath = "/health"
-healthcheckTimeout = 15
+healthcheckTimeout = 120
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 5
