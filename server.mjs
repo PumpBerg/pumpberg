@@ -207,73 +207,79 @@ async function fetchSolBalance() {
 // In setup mode, these will exist but won't actually trade (no keys)
 let scanner, chatAgent, winnerResearch, graduateAnalyzer, tradeJournal, syncClient;
 let pointsTracker = new PointsTracker(DATA_DIR);
+let engineReady = false;
 
-try {
-  scanner = new Scanner(config, DATA_DIR);
-  chatAgent = new ChatAgent(undefined, DATA_DIR);
-  winnerResearch = new WinnerResearch(DATA_DIR);
-  graduateAnalyzer = new GraduateAnalyzer(DATA_DIR);
-  tradeJournal = scanner.tradeJournal;
+function initializeEngine() {
+  try {
+    console.log("[engine] Initializing trading engine...");
+    scanner = new Scanner(config, DATA_DIR);
+    chatAgent = new ChatAgent(undefined, DATA_DIR);
+    winnerResearch = new WinnerResearch(DATA_DIR);
+    graduateAnalyzer = new GraduateAnalyzer(DATA_DIR);
+    tradeJournal = scanner.tradeJournal;
 
-  if (!SETUP_MODE) {
-    // ── Wire autonomous agent ──
-    chatAgent.winnerResearch = winnerResearch;
-    chatAgent.graduateAnalyzer = graduateAnalyzer;
-    scanner.graduateAnalyzer = graduateAnalyzer;
-    chatAgent.startAutonomousLoop(scanner, tradeJournal);
+    if (!SETUP_MODE) {
+      // ── Wire autonomous agent ──
+      chatAgent.winnerResearch = winnerResearch;
+      chatAgent.graduateAnalyzer = graduateAnalyzer;
+      scanner.graduateAnalyzer = graduateAnalyzer;
+      chatAgent.startAutonomousLoop(scanner, tradeJournal);
 
-    // Start market intelligence collection
-    scanner.marketIntel.start();
+      // Start market intelligence collection
+      scanner.marketIntel.start();
 
-    // Start graduate analyzer
-    graduateAnalyzer.start();
-    graduateAnalyzer.seedFromApi().catch((err) => {
-      console.error("Graduate seed error:", err);
-    });
-  } else {
-    logger.system("SETUP MODE: Engine initialized but not started — configure credentials in the dashboard.");
-  }
-} catch (err) {
-  console.error("[engine] Failed to initialize trading engine:", err.message);
-  SETUP_MODE = true;
-}
-
-// ── Initialize data sync client ──
-try {
-  const settingsData = loadSettings();
-  syncClient = new SyncClient({
-    dataDir: DATA_DIR,
-    instanceId: identity.instanceId,
-    walletAddress: identity.walletAddress || process.env.PUMPBERG_WALLET_ADDRESS,
-    serverUrl: settingsData.syncServerUrl || undefined,
-    enabled: settingsData.dataSharingEnabled !== false,
-  });
-
-  if (chatAgent) {
-    function attachSyncToImporter() {
-      const ragImporter = chatAgent.getRAGImporter();
-      if (ragImporter) {
-        ragImporter.setSyncClient(syncClient);
-        console.log("[sync] Attached to RAG importer");
-      } else {
-        setTimeout(attachSyncToImporter, 2000);
-      }
+      // Start graduate analyzer
+      graduateAnalyzer.start();
+      graduateAnalyzer.seedFromApi().catch((err) => {
+        console.error("Graduate seed error:", err);
+      });
+    } else {
+      logger.system("SETUP MODE: Engine initialized but not started — configure credentials in the dashboard.");
     }
-    attachSyncToImporter();
+    engineReady = true;
+    console.log("[engine] Trading engine initialized successfully.");
+  } catch (err) {
+    console.error("[engine] Failed to initialize trading engine:", err.message);
+    SETUP_MODE = true;
   }
-  syncClient.start();
-} catch (err) {
-  console.error("[sync] Failed to initialize sync:", err.message);
-}
 
-// Notify agent after every completed trade
-if (scanner && chatAgent) {
-  scanner.onTradeCompleted = (symbol, pnlSol, exitReason) => {
-    chatAgent.onTradeCompleted(scanner, tradeJournal, symbol, pnlSol, exitReason).catch((err) => {
-      console.error("Agent trade callback error:", err);
+  // ── Initialize data sync client ──
+  try {
+    const settingsData = loadSettings();
+    syncClient = new SyncClient({
+      dataDir: DATA_DIR,
+      instanceId: identity.instanceId,
+      walletAddress: identity.walletAddress || process.env.PUMPBERG_WALLET_ADDRESS,
+      serverUrl: settingsData.syncServerUrl || undefined,
+      enabled: settingsData.dataSharingEnabled !== false,
     });
-  };
-}
+
+    if (chatAgent) {
+      function attachSyncToImporter() {
+        const ragImporter = chatAgent.getRAGImporter();
+        if (ragImporter) {
+          ragImporter.setSyncClient(syncClient);
+          console.log("[sync] Attached to RAG importer");
+        } else {
+          setTimeout(attachSyncToImporter, 2000);
+        }
+      }
+      attachSyncToImporter();
+    }
+    syncClient.start();
+  } catch (err) {
+    console.error("[sync] Failed to initialize sync:", err.message);
+  }
+
+  // Notify agent after every completed trade
+  if (scanner && chatAgent) {
+    scanner.onTradeCompleted = (symbol, pnlSol, exitReason) => {
+      chatAgent.onTradeCompleted(scanner, tradeJournal, symbol, pnlSol, exitReason).catch((err) => {
+        console.error("Agent trade callback error:", err);
+      });
+    };
+  }
+} // end initializeEngine()
 
 // ── SSE clients ──
 const sseClients = new Set();
@@ -1149,10 +1155,7 @@ const server = createServer(async (req, res) => {
 });
 
 // ── Start ──
-logger.system("Dashboard server starting...");
-logger.system(`Wallet: ${PUBLIC_KEY}`);
-logger.system(`RPC: ${config.rpcUrl.replace(/api-key=.*/, "api-key=***")}`);
-logger.system(`Mode: ${config.dryRun ? "DRY RUN" : "LIVE"}`);
+console.log(`[startup] Pumpberg server starting on port ${PORT}...`);
 
 server.on("error", (err) => {
   if (err.code === "EADDRINUSE") {
@@ -1166,7 +1169,17 @@ server.on("error", (err) => {
   }
 });
 
+// Listen FIRST so healthcheck passes immediately, then initialize engine
 server.listen(PORT, () => {
+  console.log(`[startup] Server listening on port ${PORT}`);
   logger.system(`=== Dashboard running at http://localhost:${PORT} ===`);
-  console.log(`\n  Dashboard:  http://localhost:${PORT}\n`);
+
+  // Initialize the trading engine after the server is listening
+  setTimeout(() => {
+    logger.system("Initializing trading engine...");
+    initializeEngine();
+    logger.system(`Wallet: ${PUBLIC_KEY}`);
+    logger.system(`RPC: ${config.rpcUrl.replace(/api-key=.*/, "api-key=***")}`);
+    logger.system(`Mode: ${config.dryRun ? "DRY RUN" : "LIVE"}`);
+  }, 100);
 });
