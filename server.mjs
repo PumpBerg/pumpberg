@@ -251,7 +251,7 @@ function initializeEngine() {
       instanceId: identity.instanceId,
       walletAddress: identity.walletAddress || process.env.PUMPBERG_WALLET_ADDRESS,
       serverUrl: settingsData.syncServerUrl || undefined,
-      enabled: settingsData.dataSharingEnabled !== false,
+      enabled: settingsData.dataSharingEnabled === true, // off by default — opt-in only
     });
 
     if (chatAgent) {
@@ -299,12 +299,49 @@ thinkingLog.subscribe((entry) => {
 });
 
 // ── HTTP helpers ──
-function json(res, data, status = 200) {
+const ALLOWED_ORIGINS = new Set(
+  (process.env.ALLOWED_ORIGINS || "").split(",").map(s => s.trim()).filter(Boolean)
+);
+function getAllowedOrigin(req) {
+  const origin = req?.headers?.["origin"];
+  if (!origin) return undefined;
+  if (ALLOWED_ORIGINS.size === 0) return origin; // No whitelist configured = allow all (dev)
+  return ALLOWED_ORIGINS.has(origin) ? origin : undefined;
+}
+
+const SECURITY_HEADERS = {
+  "X-Content-Type-Options": "nosniff",
+  "X-Frame-Options": "DENY",
+  "Referrer-Policy": "strict-origin-when-cross-origin",
+  "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+};
+
+function json(res, data, status = 200, req = null) {
+  const headers = {
+    "Content-Type": "application/json",
+    ...SECURITY_HEADERS,
+  };
+  if (req) {
+    const origin = getAllowedOrigin(req);
+    if (origin) {
+      headers["Access-Control-Allow-Origin"] = origin;
+      headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization";
+      headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, PATCH, OPTIONS";
+      headers["Vary"] = "Origin";
+    }
+  }
+  res.writeHead(status, headers);
+  res.end(JSON.stringify(data));
+}
+
+/** Public-API json helper — always sends Access-Control-Allow-Origin: * */
+function publicJson(res, data, status = 200) {
   res.writeHead(status, {
     "Content-Type": "application/json",
     "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Headers": "Content-Type, Authorization",
-    "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Accept",
+    "Access-Control-Allow-Methods": "GET, OPTIONS",
+    ...SECURITY_HEADERS,
   });
   res.end(JSON.stringify(data));
 }
@@ -344,11 +381,15 @@ function readBody(req) {
 // ── HTTP server ──
 const server = createServer(async (req, res) => {
   if (req.method === "OPTIONS") {
-    res.writeHead(204, {
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Headers": "Content-Type, Authorization",
-      "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, OPTIONS",
-    });
+    const origin = getAllowedOrigin(req);
+    const headers = { ...SECURITY_HEADERS };
+    if (origin) {
+      headers["Access-Control-Allow-Origin"] = origin;
+      headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization";
+      headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, PATCH, OPTIONS";
+      headers["Vary"] = "Origin";
+    }
+    res.writeHead(204, headers);
     return res.end();
   }
 
@@ -388,11 +429,10 @@ const server = createServer(async (req, res) => {
     }
     // Site static assets (logo, og-image, etc.) — only files in site/public/
     if (!path.startsWith("/api/") && !path.startsWith("/dashboard")) {
-      const safePath = path.replace(/\.\.\//g, "");
-      const assetPath = join(SITE_PUBLIC_DIR, safePath);
-      if (existsSync(assetPath) && !statSync(assetPath).isDirectory()) {
+      const assetPath = resolve(SITE_PUBLIC_DIR, "." + decodeURIComponent(path));
+      if (assetPath.startsWith(SITE_PUBLIC_DIR) && existsSync(assetPath) && !statSync(assetPath).isDirectory()) {
         const ext = extname(assetPath);
-        res.writeHead(200, { "Content-Type": SITE_MIME[ext] || "application/octet-stream" });
+        res.writeHead(200, { "Content-Type": SITE_MIME[ext] || "application/octet-stream", ...SECURITY_HEADERS });
         return res.end(readFileSync(assetPath));
       }
     }
@@ -439,22 +479,26 @@ const server = createServer(async (req, res) => {
 
   // ── PUBLIC READ-ONLY API (no auth required) ──
   if (path.startsWith("/api/public/")) {
-    // CORS for live portal
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Accept");
-    if (req.method === "OPTIONS") { res.writeHead(204); return res.end(); }
-    if (req.method !== "GET") { return json(res, { error: "Method not allowed" }, 405); }
+    if (req.method === "OPTIONS") {
+      res.writeHead(204, {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "GET, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type, Accept",
+        ...SECURITY_HEADERS,
+      });
+      return res.end();
+    }
+    if (req.method !== "GET") { return publicJson(res, { error: "Method not allowed" }, 405); }
 
     const publicPath = path.replace("/api/public/", "");
 
     // GET /api/public/status
     if (publicPath === "status") {
       if (SETUP_MODE || !scanner) {
-        return json(res, { running: false, setupMode: true, openPositions: 0, stats: { totalTrades: 0, wins: 0, losses: 0, totalRealizedPnl: 0, winRate: 0 } });
+        return publicJson(res, { running: false, setupMode: true, openPositions: 0, stats: { totalTrades: 0, wins: 0, losses: 0, totalRealizedPnl: 0, winRate: 0 } });
       }
       const s = scanner.getStatus();
-      return json(res, {
+      return publicJson(res, {
         running: s.running,
         uptime: s.uptime,
         tradingMode: s.tradingMode,
@@ -468,10 +512,10 @@ const server = createServer(async (req, res) => {
     // GET /api/public/wallet
     if (publicPath === "wallet") {
       if (SETUP_MODE) {
-        return json(res, { publicKey: "", solBalance: 0, solPriceUsd: 0 });
+        return publicJson(res, { publicKey: "", solBalance: 0, solPriceUsd: 0 });
       }
       const [solBalance, solPriceUsd] = await Promise.all([fetchSolBalance(), fetchSolPrice()]);
-      return json(res, {
+      return publicJson(res, {
         publicKey: PUBLIC_KEY,
         solBalance,
         solPriceUsd,
@@ -482,7 +526,7 @@ const server = createServer(async (req, res) => {
     // GET /api/public/positions
     if (publicPath === "positions") {
       if (SETUP_MODE || !scanner) {
-        return json(res, { open: [], stats: { totalTrades: 0, wins: 0, losses: 0, winRate: 0, totalRealizedPnl: 0 } });
+        return publicJson(res, { open: [], stats: { totalTrades: 0, wins: 0, losses: 0, winRate: 0, totalRealizedPnl: 0 } });
       }
       const rawStats = scanner.positions.getStats();
       const open = scanner.positions.getOpenPositions().map(p => ({
@@ -495,7 +539,7 @@ const server = createServer(async (req, res) => {
         entryTime: p.entryTime,
         unrealizedPnl: p.unrealizedPnl,
       }));
-      return json(res, {
+      return publicJson(res, {
         open,
         stats: {
           totalTrades: rawStats.totalTrades,
@@ -512,7 +556,7 @@ const server = createServer(async (req, res) => {
     // GET /api/public/history
     if (publicPath.startsWith("history")) {
       if (SETUP_MODE || !scanner) {
-        return json(res, { trades: [], total: 0 });
+        return publicJson(res, { trades: [], total: 0 });
       }
       const limit = parseInt(query.get("limit") || "50", 10);
       const trades = scanner.positions.getClosedPositions(200, scanner.config.dryRun).slice(0, limit).map(t => ({
@@ -525,7 +569,7 @@ const server = createServer(async (req, res) => {
         buyTxSignature: t.buyTxSignature,
         exitReason: t.exitReason,
       }));
-      return json(res, { trades, total: trades.length });
+      return publicJson(res, { trades, total: trades.length });
     }
 
     // GET /api/public/logs
@@ -539,7 +583,7 @@ const server = createServer(async (req, res) => {
         category: e.category,
         message: sanitizeLogMessage(e.message),
       }));
-      return json(res, { entries: safe, lastId: safe.length > 0 ? safe[safe.length - 1].id : afterId });
+      return publicJson(res, { entries: safe, lastId: safe.length > 0 ? safe[safe.length - 1].id : afterId });
     }
 
     // GET /api/public/thinking
@@ -551,10 +595,10 @@ const server = createServer(async (req, res) => {
         timestamp: e.timestamp,
         message: e.message,
       }));
-      return json(res, { entries: safe, lastId: safe.length > 0 ? safe[safe.length - 1].id : afterId });
+      return publicJson(res, { entries: safe, lastId: safe.length > 0 ? safe[safe.length - 1].id : afterId });
     }
 
-    return json(res, { error: "Not found" }, 404);
+    return publicJson(res, { error: "Not found" }, 404);
   }
 
   // ── Authenticate all other API requests ──
@@ -737,7 +781,7 @@ const server = createServer(async (req, res) => {
       });
     }
     const [solBalance, solPriceUsd] = await Promise.all([fetchSolBalance(), fetchSolPrice()]);
-    const privKeyHint = PRIVATE_KEY ? `${PRIVATE_KEY.slice(0, 4)}...${PRIVATE_KEY.slice(-4)}` : "not-set";
+    const privKeyHint = PRIVATE_KEY ? "set" : "not-set";
     // Calculate total portfolio value: SOL + current value of all open positions
     const openPositions = scanner.positions.getOpenPositions();
     let positionsValueSol = 0;
@@ -1125,27 +1169,27 @@ const server = createServer(async (req, res) => {
     // Dashboard is served at /dashboard (or /dashboard/*)
     if (path === "/dashboard" || path.startsWith("/dashboard/") || path.startsWith("/dashboard?")) {
       const subPath = path.replace(/^\/dashboard\/?/, "/") || "/";
-      let filePath = join(DASHBOARD_DIST, subPath === "/" ? "index.html" : subPath);
-      if (!existsSync(filePath) || statSync(filePath).isDirectory()) {
+      let filePath = resolve(DASHBOARD_DIST, "." + (subPath === "/" ? "/index.html" : decodeURIComponent(subPath)));
+      if (!filePath.startsWith(DASHBOARD_DIST) || !existsSync(filePath) || statSync(filePath).isDirectory()) {
         filePath = join(DASHBOARD_DIST, "index.html");
       }
       if (existsSync(filePath) && !statSync(filePath).isDirectory()) {
         const ext = extname(filePath);
         const mime = MIME_TYPES[ext] || "application/octet-stream";
         const content = readFileSync(filePath);
-        res.writeHead(200, { "Content-Type": mime });
+        res.writeHead(200, { "Content-Type": mime, ...SECURITY_HEADERS });
         return res.end(content);
       }
     }
     // Dashboard static assets (JS/CSS bundles) — served from root paths
     // Vite outputs assets like /assets/index-abc123.js — these need to work
     if (path.startsWith("/assets/")) {
-      const filePath = join(DASHBOARD_DIST, path);
-      if (existsSync(filePath) && !statSync(filePath).isDirectory()) {
+      const filePath = resolve(DASHBOARD_DIST, "." + decodeURIComponent(path));
+      if (filePath.startsWith(DASHBOARD_DIST) && existsSync(filePath) && !statSync(filePath).isDirectory()) {
         const ext = extname(filePath);
         const mime = MIME_TYPES[ext] || "application/octet-stream";
         const content = readFileSync(filePath);
-        res.writeHead(200, { "Content-Type": mime, "Cache-Control": "public, max-age=31536000, immutable" });
+        res.writeHead(200, { "Content-Type": mime, "Cache-Control": "public, max-age=31536000, immutable", ...SECURITY_HEADERS });
         return res.end(content);
       }
     }
