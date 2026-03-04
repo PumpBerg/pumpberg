@@ -49,7 +49,9 @@ Pumpberg scans every new token launch on pump.fun in real-time, scores them with
 git clone https://github.com/PumpBerg/pumpberg.git
 cd pumpberg
 npm install
-cd dashboard && npm install && cd ..
+cd dashboard
+npm install
+cd ..
 ```
 
 ### Configure
