@@ -46,8 +46,8 @@ export class SyncClient {
     this.dataDir = opts.dataDir;
     this.instanceId = opts.instanceId;
     this.walletAddress = opts.walletAddress;
-    this.serverUrl = opts.serverUrl || "https://pumpbot-production-ef7c.up.railway.app"; // Central sync server
-    this.enabled = opts.enabled ?? true;
+    this.serverUrl = opts.serverUrl || "";
+    this.enabled = this.serverUrl ? (opts.enabled ?? false) : false;
 
     this.state = this.loadState();
     this.queue = this.loadQueue();

@@ -1,0 +1,901 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pumpberg -- Deploy Your Own Trading Bot</title>
+  <meta name="description" content="Open-source autonomous pump.fun trading bot. Fork the repo, run locally, trade with AI on Solana.">
+  <link rel="icon" type="image/png" href="/logo.png">
+
+  <!-- Open Graph -->
+  <meta property="og:title" content="Pumpberg -- Deploy Your Own Trading Bot">
+  <meta property="og:description" content="Open-source autonomous pump.fun trading bot. Fork, configure, run. AI-powered Solana memecoin trading.">
+  <meta property="og:image" content="/og-image.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:type" content="website">
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Pumpberg -- Deploy Your Own Trading Bot">
+  <meta name="twitter:description" content="Open-source AI trading bot for pump.fun. Fork, configure, run locally.">
+  <meta name="twitter:image" content="/og-image.png">
+
+  <!-- Geist Mono -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/geist@1.3.1/dist/fonts/geist-mono/style.min.css">
+
+  <style>
+    :root {
+      --bg: #050505;
+      --surface: #0a0a0a;
+      --surface-2: #111111;
+      --border: #1a1a1a;
+      --border-hover: #2a2a2a;
+      --text: #e0e0e0;
+      --text-muted: #666666;
+      --text-dim: #444444;
+      --green: #00ff41;
+      --green-dim: #00cc33;
+      --green-glow: rgba(0, 255, 65, 0.06);
+      --green-glow-strong: rgba(0, 255, 65, 0.12);
+      --red: #ff3333;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: "Geist Mono", "SF Mono", "Fira Code", monospace;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    ::selection {
+      background: var(--green);
+      color: #000;
+    }
+
+    .bg-grid {
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(0, 255, 65, 0.02) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0, 255, 65, 0.02) 1px, transparent 1px);
+      background-size: 48px 48px;
+      z-index: 0;
+      pointer-events: none;
+    }
+
+    .bg-glow {
+      position: fixed;
+      top: -300px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 1000px;
+      height: 700px;
+      background: radial-gradient(ellipse, rgba(0, 255, 65, 0.04) 0%, transparent 70%);
+      z-index: 0;
+      pointer-events: none;
+    }
+
+    .container {
+      position: relative;
+      z-index: 1;
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 48px 24px;
+    }
+
+    /* ---- Nav ---- */
+    .nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 0;
+      margin-bottom: 64px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .nav-brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      text-decoration: none;
+      color: var(--text);
+    }
+
+    .nav-brand img {
+      width: 32px;
+      height: 32px;
+      border-radius: 4px;
+    }
+
+    .nav-brand span {
+      font-weight: 700;
+      font-size: 15px;
+      letter-spacing: -0.5px;
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 24px;
+    }
+
+    .nav-links a {
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 12px;
+      font-weight: 500;
+      transition: color 0.15s;
+    }
+
+    .nav-links a:hover { color: var(--green); }
+
+    .nav-links a svg {
+      width: 16px;
+      height: 16px;
+      fill: currentColor;
+      vertical-align: -2px;
+    }
+
+    .hero-badge a {
+      color: inherit;
+      text-decoration: none;
+    }
+    .hero-badge a:hover {
+      text-decoration: underline;
+    }
+    .hero-badge .live-dot {
+      display: inline-block;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--green);
+      margin-right: 6px;
+      animation: pulse-live 1.5s ease-in-out infinite;
+    }
+    @keyframes pulse-live {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+
+    /* ---- Hero ---- */
+    .hero {
+      text-align: center;
+      margin-bottom: 80px;
+    }
+
+    .hero-badge {
+      display: inline-block;
+      padding: 4px 12px;
+      background: var(--green-glow);
+      border: 1px solid rgba(0, 255, 65, 0.15);
+      border-radius: 100px;
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--green);
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      margin-bottom: 28px;
+    }
+
+    .hero h1 {
+      font-size: 48px;
+      font-weight: 800;
+      letter-spacing: -2px;
+      line-height: 1.1;
+      margin-bottom: 20px;
+      color: #fff;
+    }
+
+    .hero h1 .accent { color: var(--green); }
+
+    .hero p {
+      font-size: 14px;
+      color: var(--text-muted);
+      max-width: 520px;
+      margin: 0 auto 36px;
+      line-height: 1.7;
+      font-weight: 400;
+    }
+
+    .hero-actions {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 28px;
+      font-size: 13px;
+      font-weight: 700;
+      font-family: inherit;
+      border-radius: 6px;
+      text-decoration: none;
+      transition: all 0.15s;
+      cursor: pointer;
+      border: none;
+    }
+
+    .btn-primary {
+      background: var(--green);
+      color: #000;
+      box-shadow: 0 0 20px var(--green-glow-strong);
+    }
+
+    .btn-primary:hover {
+      background: var(--green-dim);
+      transform: translateY(-1px);
+      box-shadow: 0 0 40px var(--green-glow-strong);
+    }
+
+    .btn-secondary {
+      background: var(--surface-2);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+
+    .btn-secondary:hover {
+      border-color: var(--border-hover);
+      background: #151515;
+    }
+
+    /* ---- Features ---- */
+    .features {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1px;
+      background: var(--border);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+      margin-bottom: 80px;
+    }
+
+    .feature {
+      background: var(--surface);
+      padding: 28px 24px;
+      transition: background 0.15s;
+    }
+
+    .feature:hover { background: var(--surface-2); }
+
+    .feature-label {
+      font-size: 10px;
+      font-weight: 800;
+      color: var(--green);
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      margin-bottom: 10px;
+    }
+
+    .feature h3 {
+      font-size: 13px;
+      font-weight: 700;
+      margin-bottom: 6px;
+      color: #fff;
+    }
+
+    .feature p {
+      font-size: 11px;
+      color: var(--text-muted);
+      line-height: 1.6;
+    }
+
+    /* ---- Sections ---- */
+    .section {
+      margin-bottom: 80px;
+    }
+
+    .section-header {
+      margin-bottom: 32px;
+    }
+
+    .section-header h2 {
+      font-size: 28px;
+      font-weight: 800;
+      letter-spacing: -1px;
+      margin-bottom: 8px;
+      color: #fff;
+    }
+
+    .section-header p {
+      font-size: 13px;
+      color: var(--text-muted);
+      line-height: 1.6;
+    }
+
+    /* ---- Providers ---- */
+    .providers {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 32px;
+    }
+
+    .provider {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 20px;
+      transition: border-color 0.15s;
+    }
+
+    .provider:hover { border-color: var(--border-hover); }
+
+    .provider-name {
+      font-size: 13px;
+      font-weight: 700;
+      margin-bottom: 4px;
+      color: #fff;
+    }
+
+    .provider-desc {
+      font-size: 11px;
+      color: var(--text-muted);
+      line-height: 1.5;
+      margin-bottom: 10px;
+    }
+
+    .provider-link {
+      font-size: 11px;
+      color: var(--green);
+      text-decoration: none;
+      font-weight: 600;
+    }
+
+    .provider-link:hover { text-decoration: underline; }
+
+    .tag {
+      display: inline-block;
+      font-size: 9px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      padding: 2px 6px;
+      border-radius: 3px;
+      margin-bottom: 8px;
+    }
+
+    .tag-req {
+      background: rgba(255, 51, 51, 0.12);
+      color: var(--red);
+      border: 1px solid rgba(255, 51, 51, 0.18);
+    }
+
+    .tag-rec {
+      background: var(--green-glow);
+      color: var(--green);
+      border: 1px solid rgba(0, 255, 65, 0.15);
+    }
+
+    /* ---- Code ---- */
+    .code-block {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+      margin-bottom: 16px;
+    }
+
+    .code-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 16px;
+      background: var(--surface-2);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .code-head span {
+      font-size: 11px;
+      color: var(--text-muted);
+      font-weight: 600;
+    }
+
+    .copy-btn {
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--text-muted);
+      background: none;
+      border: 1px solid var(--border);
+      padding: 3px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-family: inherit;
+      transition: all 0.15s;
+    }
+
+    .copy-btn:hover {
+      color: var(--green);
+      border-color: rgba(0,255,65,0.3);
+    }
+
+    .code-body {
+      padding: 16px;
+      overflow-x: auto;
+    }
+
+    .code-body pre {
+      font-size: 12px;
+      line-height: 1.7;
+      color: var(--text);
+      white-space: pre;
+    }
+
+    .c { color: var(--text-dim); }
+    .g { color: var(--green); }
+    .s { color: #ff9500; }
+    .v { color: var(--text-muted); }
+
+    /* ---- Steps ---- */
+    .steps {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      margin-bottom: 32px;
+    }
+
+    .step {
+      display: flex;
+      gap: 16px;
+    }
+
+    .step-n {
+      flex-shrink: 0;
+      width: 28px;
+      height: 28px;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 800;
+      color: var(--green);
+    }
+
+    .step-body h3 {
+      font-size: 14px;
+      font-weight: 700;
+      margin-bottom: 4px;
+      color: #fff;
+    }
+
+    .step-body p {
+      font-size: 12px;
+      color: var(--text-muted);
+      line-height: 1.6;
+    }
+
+    .step-body a {
+      color: var(--green);
+      text-decoration: none;
+    }
+
+    .step-body a:hover { text-decoration: underline; }
+
+    .step-body code {
+      font-size: 11px;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      padding: 1px 5px;
+      color: var(--green);
+      font-family: inherit;
+    }
+
+    /* ---- Live banner ---- */
+    .live-banner {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 36px;
+      text-align: center;
+    }
+
+    .live-dot {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      background: var(--green);
+      border-radius: 50%;
+      margin-right: 8px;
+      box-shadow: 0 0 8px var(--green-glow-strong);
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+
+    .live-banner h3 {
+      font-size: 16px;
+      font-weight: 700;
+      margin-bottom: 8px;
+      color: #fff;
+    }
+
+    .live-banner p {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-bottom: 24px;
+      line-height: 1.6;
+      max-width: 480px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    /* ---- Warning ---- */
+    .warning {
+      background: rgba(255, 51, 51, 0.03);
+      border: 1px solid rgba(255, 51, 51, 0.1);
+      border-radius: 8px;
+      padding: 20px 24px;
+      margin-bottom: 16px;
+    }
+
+    .warning-label {
+      font-size: 10px;
+      font-weight: 800;
+      color: var(--red);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 6px;
+    }
+
+    .warning p {
+      font-size: 11px;
+      color: var(--text-muted);
+      line-height: 1.7;
+    }
+
+    /* ---- Footer ---- */
+    .footer {
+      text-align: center;
+      padding: 40px 0;
+      margin-top: 40px;
+      border-top: 1px solid var(--border);
+    }
+
+    .footer p {
+      font-size: 11px;
+      color: var(--text-dim);
+    }
+
+    .footer a {
+      color: var(--text-muted);
+      text-decoration: none;
+    }
+
+    .footer a:hover { color: var(--green); }
+
+    @media (max-width: 700px) {
+      .hero h1 { font-size: 32px; }
+      .features { grid-template-columns: 1fr; }
+      .providers { grid-template-columns: 1fr; }
+      .nav-links { gap: 14px; }
+      .nav-links a { font-size: 11px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="bg-grid"></div>
+  <div class="bg-glow"></div>
+
+  <div class="container">
+
+    <!-- Nav -->
+    <nav class="nav">
+      <a href="/" class="nav-brand">
+        <img src="/logo.png" alt="Pumpberg">
+        <span>pumpberg</span>
+      </a>
+      <div class="nav-links">
+        <a href="https://github.com/pumpberg/pumpberg" target="_blank" title="GitHub"><svg viewBox="0 0 16 16"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg></a>
+        <a href="#deploy">Deploy</a>
+        <a href="#live">Live Instance</a>
+        <a href="https://pump.fun/coin/BHDuvBB3bTnaA1J1NZdz7bXouSautWJwgp9MkUBUpump" target="_blank">$PUMPBERG</a>
+      </div>
+    </nav>
+
+    <!-- Hero -->
+    <div class="hero">
+      <div class="hero-badge"><a href="https://pump.fun/coin/BHDuvBB3bTnaA1J1NZdz7bXouSautWJwgp9MkUBUpump" target="_blank" id="berg-link"><span class="live-dot"></span>$BERG IS LIVE</a></div>
+      <h1>Deploy your own<br><span class="accent">Pumpberg</span> bot</h1>
+      <p>
+        Autonomous AI trading bot for pump.fun. Scans tokens in real-time,
+        scores with 8-factor signals + Claude AI, executes on Solana.
+        Fork the repo. Configure your keys. Run locally.
+      </p>
+      <div class="hero-actions">
+        <a href="#deploy" class="btn btn-primary">Get Started</a>
+        <a href="https://github.com/pumpberg/pumpberg" class="btn btn-secondary" target="_blank">View Source</a>
+      </div>
+    </div>
+
+    <!-- Features -->
+    <div class="features">
+      <div class="feature">
+        <div class="feature-label">Scanner</div>
+        <h3>Real-Time Detection</h3>
+        <p>Streams every new token launch, trade, and migration via PumpPortal WebSocket. Sub-second latency.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-label">AI Scoring</div>
+        <h3>Claude-Powered Analysis</h3>
+        <p>8-dimension signal engine + Claude Haiku narrative scoring. Every token evaluated before entry.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-label">Execution</div>
+        <h3>Fast Trades on Solana</h3>
+        <p>PumpPortal local-transaction API with priority fees. Tiered take-profit + trailing stop exits.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-label">Agent</div>
+        <h3>Autonomous AI Agent</h3>
+        <p>Claude Sonnet 4 makes buy/sell decisions, writes post-mortems, and evolves strategy over time.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-label">Learning</div>
+        <h3>RAG Memory System</h3>
+        <p>SQLite-backed vector retrieval over past trades. The bot remembers and improves from its own history.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-label">Dashboard</div>
+        <h3>Full Control Panel</h3>
+        <p>React dashboard with live positions, trade history, AI chat, thinking panel, and config editor.</p>
+      </div>
+    </div>
+
+    <!-- Deploy -->
+    <div class="section" id="deploy">
+      <div class="section-header">
+        <h2>What you need</h2>
+        <p>Pumpberg runs entirely on your machine. You bring your own API keys. Nothing is uploaded. Your private key never leaves your computer.</p>
+      </div>
+
+      <div class="providers">
+        <div class="provider">
+          <span class="tag tag-req">Required</span>
+          <div class="provider-name">Solana Wallet</div>
+          <div class="provider-desc">A dedicated trading wallet with SOL for executing trades. Use a fresh wallet -- never your main. Fund with 0.1-0.5 SOL to start.</div>
+          <a href="https://pumpportal.fun/trading-api" class="provider-link" target="_blank">Create via PumpPortal &rarr;</a>
+        </div>
+        <div class="provider">
+          <span class="tag tag-req">Required</span>
+          <div class="provider-name">Solana RPC Endpoint</div>
+          <div class="provider-desc">WebSocket RPC for blockchain communication. The default public endpoint is slow and rate-limited. Helius free tier is recommended.</div>
+          <a href="https://helius.dev" class="provider-link" target="_blank">Get from Helius (free) &rarr;</a>
+        </div>
+        <div class="provider">
+          <span class="tag tag-rec">Recommended</span>
+          <div class="provider-name">Anthropic API Key</div>
+          <div class="provider-desc">Powers the AI scoring engine (Claude Haiku) and autonomous agent (Claude Sonnet 4). Without this, the bot cannot evaluate tokens.</div>
+          <a href="https://console.anthropic.com" class="provider-link" target="_blank">Get API key ($5 min credit) &rarr;</a>
+        </div>
+        <div class="provider">
+          <span class="tag tag-rec">Recommended</span>
+          <div class="provider-name">PumpPortal API Key</div>
+          <div class="provider-desc">Enables fast trade execution and real-time WebSocket feed for pump.fun token data. Free to create.</div>
+          <a href="https://pumpportal.fun/trading-api" class="provider-link" target="_blank">Get API key (free) &rarr;</a>
+        </div>
+      </div>
+
+      <!-- Steps -->
+      <div class="section-header">
+        <h2>Deploy in 3 steps</h2>
+      </div>
+
+      <div class="steps">
+        <div class="step">
+          <div class="step-n">1</div>
+          <div class="step-body">
+            <h3>Clone the repository</h3>
+            <p>Requires <a href="https://nodejs.org" target="_blank">Node.js v20+</a> and <a href="https://git-scm.com" target="_blank">Git</a>.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="code-block">
+        <div class="code-head">
+          <span>Terminal</span>
+          <button class="copy-btn" onclick="copyCode(this,'c1')">Copy</button>
+        </div>
+        <div class="code-body">
+<pre id="c1"><span class="g">git clone</span> https://github.com/pumpberg/pumpberg.git
+<span class="g">cd</span> pumpberg
+<span class="g">npm install</span>
+<span class="g">cd</span> dashboard
+<span class="g">npm install</span>
+<span class="g">cd</span> ..</pre>
+        </div>
+      </div>
+
+      <div class="steps">
+        <div class="step">
+          <div class="step-n">2</div>
+          <div class="step-body">
+            <h3>Configure your environment</h3>
+            <p>Copy the example config and fill in your keys. Open <code>.env</code> in any text editor.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="code-block">
+        <div class="code-head">
+          <span>.env</span>
+          <button class="copy-btn" onclick="copyCode(this,'c2')">Copy</button>
+        </div>
+        <div class="code-body">
+<pre id="c2"><span class="g">cp</span> .env.example .env
+
+<span class="c"># ---- Required ----</span>
+<span class="v">PUMP_TRADER_PRIVATE_KEY</span>=<span class="s">your_base58_private_key</span>
+<span class="v">PUMP_TRADER_PUBLIC_KEY</span>=<span class="s">your_solana_public_key</span>
+<span class="v">PUMP_TRADER_RPC_URL</span>=<span class="s">wss://mainnet.helius-rpc.com/?api-key=YOUR_KEY</span>
+<span class="v">PUMP_TRADER_API_KEY</span>=<span class="s">your_pumpportal_api_key</span>
+
+<span class="c"># ---- AI Engine ----</span>
+<span class="v">ANTHROPIC_API_KEY</span>=<span class="s">sk-ant-api03-your_key_here</span>
+
+<span class="c"># ---- Dashboard ----</span>
+<span class="v">PUMP_TRADER_ADMIN_USERNAME</span>=<span class="s">admin</span>
+<span class="v">PUMP_TRADER_ADMIN_PASSWORD</span>=<span class="s">set_a_strong_password</span></pre>
+        </div>
+      </div>
+
+      <div class="steps">
+        <div class="step">
+          <div class="step-n">3</div>
+          <div class="step-body">
+            <h3>Start the bot</h3>
+            <p>The bot starts in <strong style="color:#fff">dry-run mode</strong> by default -- no real SOL at risk. Open the dashboard to monitor, chat with the AI, and toggle live trading when ready.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="code-block">
+        <div class="code-head">
+          <span>Terminal</span>
+          <button class="copy-btn" onclick="copyCode(this,'c3')">Copy</button>
+        </div>
+        <div class="code-body">
+<pre id="c3"><span class="c"># Start the trading bot + API server</span>
+<span class="g">npm start</span>
+
+<span class="c"># In a second terminal -- start the dashboard</span>
+<span class="g">npm run</span> dashboard:dev
+
+<span class="c"># Open http://localhost:3847 in your browser</span></pre>
+        </div>
+      </div>
+    </div>
+
+    <!-- Key Guide -->
+    <div class="section">
+      <div class="section-header">
+        <h2>Getting your keys</h2>
+        <p>Step-by-step for each service you need.</p>
+      </div>
+
+      <div class="steps">
+        <div class="step">
+          <div class="step-n">A</div>
+          <div class="step-body">
+            <h3>Solana Wallet (Private Key + Public Key)</h3>
+            <p>Go to <a href="https://pumpportal.fun/trading-api" target="_blank">pumpportal.fun/trading-api</a>. Click "Generate New Wallet" -- it gives you a base58 private key and public key. Copy both. <strong style="color:#fff">Save the private key securely, you cannot recover it.</strong> Then send SOL to the public key address from any exchange or wallet. Start with 0.1-0.5 SOL.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-n">B</div>
+          <div class="step-body">
+            <h3>Helius RPC (Solana RPC URL)</h3>
+            <p>Go to <a href="https://helius.dev" target="_blank">helius.dev</a>. Sign up (free). Go to Dashboard, create a new project. Copy the WebSocket URL -- it looks like <code>wss://mainnet.helius-rpc.com/?api-key=abc123</code>. Free tier gives 100K requests/day.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-n">C</div>
+          <div class="step-body">
+            <h3>Anthropic API Key (Claude AI)</h3>
+            <p>Go to <a href="https://console.anthropic.com" target="_blank">console.anthropic.com</a>. Sign up, add $5+ in credits. Go to API Keys, click "Create Key". Copy the key -- it starts with <code>sk-ant-api03-</code>. This powers both token scoring (Haiku) and the autonomous agent (Sonnet 4).</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-n">D</div>
+          <div class="step-body">
+            <h3>PumpPortal API Key (Trade Execution)</h3>
+            <p>Go to <a href="https://pumpportal.fun/trading-api" target="_blank">pumpportal.fun/trading-api</a>. Sign up or log in. Navigate to your dashboard and generate an API key. This enables fast trade execution and the real-time WebSocket feed. Free to create.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Fund Wallet -->
+    <div class="section">
+      <div class="section-header">
+        <h2>Fund your trading wallet</h2>
+        <p>After creating your wallet, send SOL to the public key address. The bot needs SOL to execute buy transactions on pump.fun.</p>
+      </div>
+
+      <div class="steps">
+        <div class="step">
+          <div class="step-n">1</div>
+          <div class="step-body">
+            <h3>Start small -- 0.1 to 0.5 SOL</h3>
+            <p>The bot trades in small positions (configurable). 0.1 SOL is enough to learn how it works. You can always add more later. The bot starts in dry-run mode regardless.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-n">2</div>
+          <div class="step-body">
+            <h3>Send from any exchange or wallet</h3>
+            <p>Use Phantom, Solflare, Coinbase, Binance, or any Solana-compatible source. Send to your <code>PUMP_TRADER_PUBLIC_KEY</code> address. Confirms in seconds.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-n">3</div>
+          <div class="step-body">
+            <h3>Verify on Solscan</h3>
+            <p>Check your balance at <a href="https://solscan.io" target="_blank">solscan.io</a> by searching your public key. The dashboard also shows your SOL balance in real-time once the bot starts.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Live Instance -->
+    <div class="section" id="live">
+      <div class="section-header">
+        <h2>Live instance</h2>
+        <p>Watch our own Pumpberg bot trade in real-time. Every trade, every decision, every P&L -- verifiable on-chain via Solscan.</p>
+      </div>
+
+      <div class="live-banner">
+        <h3><span class="live-dot"></span>Pumpberg #001 -- Live Trading</h3>
+        <p>View the full dashboard of our running instance. Positions, trade history, AI thinking process, terminal logs, wallet balances, and on-chain verification.</p>
+        <a href="/live" class="btn btn-primary">View Live Dashboard</a>
+      </div>
+    </div>
+
+    <!-- Warnings -->
+    <div class="warning">
+      <div class="warning-label">Risk Disclaimer</div>
+      <p>Trading memecoins is extremely risky. The vast majority of pump.fun tokens go to zero. Only ~0.4% of tokens graduate from the bonding curve. This software is for educational and research purposes. Never trade with money you cannot afford to lose. The bot starts in dry-run mode by default. Past performance does not guarantee future results.</p>
+    </div>
+
+    <div class="warning">
+      <div class="warning-label">Security</div>
+      <p>Your private key and API keys are stored locally in your .env file and never uploaded anywhere. Pumpberg is open source -- inspect the code yourself. Use a dedicated trading wallet, not your main wallet. The developers are not responsible for any financial losses.</p>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+      <p>
+        <a href="https://github.com/pumpberg/pumpberg" target="_blank">GitHub</a>
+        &nbsp;&middot;&nbsp;
+        <a href="https://pump.fun/coin/BHDuvBB3bTnaA1J1NZdz7bXouSautWJwgp9MkUBUpump" target="_blank">$PUMPBERG</a>
+        &nbsp;&middot;&nbsp;
+        MIT License
+      </p>
+    </div>
+  </div>
+
+  <script>
+    function copyCode(btn, id) {
+      const el = document.getElementById(id);
+      navigator.clipboard.writeText(el.innerText).then(() => {
+        btn.textContent = 'Copied';
+        setTimeout(() => { btn.textContent = 'Copy'; }, 1500);
+      });
+    }
+  </script>
+</body>
+</html>

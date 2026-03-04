@@ -1,11 +1,10 @@
 # Nixpacks build configuration for Railway
-# Overrides default npm ci with npm install
 
 [phases.install]
-cmds = ["rm -f package-lock.json", "npm install"]
+cmds = ["npm ci", "cd dashboard && npm ci"]
 
 [phases.build]
-cmds = ["echo 'build done'"]
+cmds = ["cd dashboard && npm run build"]
 
 [start]
 cmd = "npx tsx server.mjs"
